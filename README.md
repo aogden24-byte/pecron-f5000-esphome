@@ -47,8 +47,8 @@ Looking into the expansion port on the station:
 | Signal bottom-left (BL) | RS485, ~0–0.7 V idle | RS485 base **B** |
 | Signal top-right (TR) | **≈ 53 V pack voltage** | **Nothing — never connect** |
 | Signal bottom-right (BR) | ≈ 0 V | Not used |
-| Large top pin | Pack − | Not used |
-| Large bottom pin | Pack + (always live) | Not used |
+| Large pin above the signal block | Pack − | Not used |
+| Large pin below the signal block | Pack + (always live) | Not used |
 
 - **A/B polarity:** RS485 A/B labelling varies between vendors. If you see no valid frames
   or rising junk bytes, swap A and B — it is harmless.

@@ -1,61 +1,59 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" font-family="Helvetica, Arial, sans-serif">
-  <rect width="900" height="560" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 650" font-family="Helvetica, Arial, sans-serif">
+  <rect width="900" height="650" fill="#ffffff"/>
   <text x="450" y="36" text-anchor="middle" font-size="22" font-weight="bold" fill="#1d2b36">Pecron F5000LFP expansion port (XT120 2+4) to M5Stack Atom + RS485 base</text>
   <text x="450" y="60" text-anchor="middle" font-size="14" fill="#555">Looking into the port on the station. Receive-only tap: only the two left signal pins are used.</text>
 
   <!-- Connector housing -->
-  <rect x="60" y="100" width="300" height="300" rx="28" fill="#2f2f2f" stroke="#111" stroke-width="3"/>
-  <text x="210" y="425" text-anchor="middle" font-size="15" fill="#1d2b36" font-weight="bold">Station expansion port</text>
+  <rect x="100" y="90" width="220" height="430" rx="28" fill="#2f2f2f" stroke="#111" stroke-width="3"/>
+  <text x="210" y="545" text-anchor="middle" font-size="15" fill="#1d2b36" font-weight="bold">Station expansion port</text>
 
-  <!-- Power pins -->
-  <circle cx="140" cy="175" r="38" fill="#c9a227" stroke="#7a6212" stroke-width="3"/>
-  <text x="140" y="181" text-anchor="middle" font-size="18" font-weight="bold" fill="#2a2100">−</text>
-  <circle cx="140" cy="325" r="38" fill="#c9a227" stroke="#7a6212" stroke-width="3"/>
-  <text x="140" y="331" text-anchor="middle" font-size="18" font-weight="bold" fill="#2a2100">+</text>
-  <text x="140" y="228" text-anchor="middle" font-size="12" fill="#eee">pack −</text>
-  <text x="140" y="378" text-anchor="middle" font-size="12" fill="#eee">pack + (live)</text>
+  <!-- Power pins: negative above, positive below, centred on the signal block -->
+  <circle cx="210" cy="155" r="40" fill="#c9a227" stroke="#7a6212" stroke-width="3"/>
+  <text x="210" y="162" text-anchor="middle" font-size="22" font-weight="bold" fill="#2a2100">−</text>
+  <text x="210" y="108" text-anchor="middle" font-size="11" fill="#eee">pack −</text>
+  <circle cx="210" cy="445" r="40" fill="#c9a227" stroke="#7a6212" stroke-width="3"/>
+  <text x="210" y="452" text-anchor="middle" font-size="22" font-weight="bold" fill="#2a2100">+</text>
+  <text x="210" y="505" text-anchor="middle" font-size="11" fill="#eee">pack + (live)</text>
 
   <!-- Signal pins 2x2 -->
-  <circle cx="250" cy="200" r="16" fill="#e07b00" stroke="#fff" stroke-width="2"/>
-  <circle cx="250" cy="300" r="16" fill="#1f6fd1" stroke="#fff" stroke-width="2"/>
-  <circle cx="310" cy="200" r="16" fill="#c62828" stroke="#fff" stroke-width="2"/>
-  <circle cx="310" cy="300" r="16" fill="#777" stroke="#fff" stroke-width="2"/>
-  <text x="216" y="204" text-anchor="middle" font-size="11" fill="#eee">TL</text>
-  <text x="216" y="304" text-anchor="middle" font-size="11" fill="#eee">BL</text>
-  <text x="310" y="180" text-anchor="middle" font-size="11" fill="#eee">TR</text>
-  <text x="310" y="333" text-anchor="middle" font-size="11" fill="#eee">BR</text>
+  <circle cx="180" cy="260" r="16" fill="#e07b00" stroke="#fff" stroke-width="2"/>
+  <circle cx="240" cy="260" r="16" fill="#c62828" stroke="#fff" stroke-width="2"/>
+  <circle cx="180" cy="340" r="16" fill="#1f6fd1" stroke="#fff" stroke-width="2"/>
+  <circle cx="240" cy="340" r="16" fill="#777" stroke="#fff" stroke-width="2"/>
+  <line x1="230" y1="250" x2="250" y2="270" stroke="#fff" stroke-width="3"/>
+  <line x1="250" y1="250" x2="230" y2="270" stroke="#fff" stroke-width="3"/>
+  <text x="146" y="264" text-anchor="middle" font-size="11" fill="#eee">TL</text>
+  <text x="146" y="344" text-anchor="middle" font-size="11" fill="#eee">BL</text>
+  <text x="276" y="264" text-anchor="middle" font-size="11" fill="#eee">TR</text>
+  <text x="276" y="344" text-anchor="middle" font-size="11" fill="#eee">BR</text>
 
-  <!-- Danger marker on TR -->
-  <line x1="300" y1="190" x2="320" y2="210" stroke="#fff" stroke-width="3"/>
-  <line x1="320" y1="190" x2="300" y2="210" stroke="#fff" stroke-width="3"/>
-
-  <!-- Wires to Atom -->
-  <path d="M250 184 L250 130 C 470 130, 470 232, 600 232" fill="none" stroke="#e07b00" stroke-width="5"/>
-  <path d="M250 316 L250 370 C 470 370, 470 268, 600 268" fill="none" stroke="#1f6fd1" stroke-width="5"/>
-  <text x="400" y="122" font-size="13" fill="#e07b00" font-weight="bold">RS485 A</text>
-  <text x="400" y="392" font-size="13" fill="#1f6fd1" font-weight="bold">RS485 B</text>
+  <!-- Wires: A leaves above the signal block, B below it -->
+  <path d="M180 244 L180 216 L330 216 C 470 216, 480 292, 600 292" fill="none" stroke="#e07b00" stroke-width="5"/>
+  <path d="M180 356 L180 384 L330 384 C 470 384, 480 328, 600 328" fill="none" stroke="#1f6fd1" stroke-width="5"/>
+  <text x="390" y="206" font-size="13" fill="#e07b00" font-weight="bold">RS485 A</text>
+  <text x="390" y="404" font-size="13" fill="#1f6fd1" font-weight="bold">RS485 B</text>
 
   <!-- Atom + RS485 base -->
-  <rect x="600" y="170" width="200" height="160" rx="14" fill="#f2f2f2" stroke="#333" stroke-width="3"/>
-  <rect x="640" y="120" width="120" height="50" rx="8" fill="#ff6b00" stroke="#333" stroke-width="2"/>
-  <text x="700" y="151" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff">ATOM Lite</text>
-  <text x="700" y="200" text-anchor="middle" font-size="14" font-weight="bold" fill="#1d2b36">ATOMIC RS485 base</text>
-  <rect x="600" y="220" width="40" height="24" fill="#2e7d32"/><text x="620" y="237" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">A</text>
-  <rect x="600" y="256" width="40" height="24" fill="#2e7d32"/><text x="620" y="273" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">B</text>
-  <text x="700" y="300" text-anchor="middle" font-size="12" fill="#333">RX GPIO22 · TX GPIO19</text>
-  <text x="700" y="318" text-anchor="middle" font-size="12" fill="#333">115200 8N1</text>
+  <rect x="600" y="230" width="200" height="160" rx="14" fill="#f2f2f2" stroke="#333" stroke-width="3"/>
+  <rect x="640" y="180" width="120" height="50" rx="8" fill="#ff6b00" stroke="#333" stroke-width="2"/>
+  <text x="700" y="211" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff">ATOM Lite</text>
+  <text x="700" y="258" text-anchor="middle" font-size="14" font-weight="bold" fill="#1d2b36">ATOMIC RS485 base</text>
+  <rect x="600" y="280" width="40" height="24" fill="#2e7d32"/><text x="620" y="297" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">A</text>
+  <rect x="600" y="316" width="40" height="24" fill="#2e7d32"/><text x="620" y="333" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">B</text>
+  <text x="710" y="360" text-anchor="middle" font-size="12" fill="#333">RX GPIO22 · TX GPIO19</text>
+  <text x="710" y="377" text-anchor="middle" font-size="12" fill="#333">115200 8N1</text>
 
   <!-- USB power -->
-  <path d="M700 330 L700 400" stroke="#444" stroke-width="5"/>
-  <rect x="610" y="400" width="180" height="40" rx="8" fill="#e9eef3" stroke="#444" stroke-width="2"/>
-  <text x="700" y="425" text-anchor="middle" font-size="13" fill="#1d2b36">USB-C power from the station</text>
+  <path d="M700 390 L700 450" stroke="#444" stroke-width="5"/>
+  <rect x="610" y="450" width="180" height="40" rx="8" fill="#e9eef3" stroke="#444" stroke-width="2"/>
+  <text x="700" y="475" text-anchor="middle" font-size="13" fill="#1d2b36">USB-C power from the station</text>
 
   <!-- Legend -->
   <g font-size="13" fill="#1d2b36">
-    <circle cx="80" cy="470" r="8" fill="#e07b00"/><text x="96" y="475">TL → base A  (RS485, ~0–0.2 V idle vs pack −)</text>
-    <circle cx="80" cy="496" r="8" fill="#1f6fd1"/><text x="96" y="501">BL → base B  (RS485, ~0–0.7 V idle vs pack −)</text>
-    <circle cx="500" cy="470" r="8" fill="#c62828"/><text x="516" y="475" fill="#c62828" font-weight="bold">TR ≈ 53 V pack voltage — NEVER connect</text>
-    <circle cx="500" cy="496" r="8" fill="#777"/><text x="516" y="501">BR ≈ 0 V — not used</text>
-    <text x="80" y="535" fill="#555">No frames or junk? Swap A and B (harmless). Power pins are always live — never short them.</text>
+    <circle cx="80" cy="578" r="8" fill="#e07b00"/><text x="96" y="583">TL → base A  (RS485, ~0–0.2 V idle vs pack −)</text>
+    <circle cx="80" cy="604" r="8" fill="#1f6fd1"/><text x="96" y="609">BL → base B  (RS485, ~0–0.7 V idle vs pack −)</text>
+    <circle cx="500" cy="578" r="8" fill="#c62828"/><text x="516" y="583" fill="#c62828" font-weight="bold">TR ≈ 53 V pack voltage — NEVER connect</text>
+    <circle cx="500" cy="604" r="8" fill="#777"/><text x="516" y="609">BR ≈ 0 V — not used</text>
+    <text x="80" y="637" fill="#555">No frames or junk? Swap A and B (harmless). Power pins are always live — never short them.</text>
   </g>
 </svg>
