@@ -1,0 +1,268 @@
+# PECRON F5000LFP - EXPANSION BUS DECODER (passive, Atom RS485 base)
+# ============================================================================
+# Bus: Modbus-RTU-framed, 115200 8N1, CRC-16/Modbus. Head unit is master.
+#   Polls slots 00..05 (expansion packs) + FF (host/internal BMS):
+#     <addr> 03 8202 0032 <crc>          every 200 ms, cycle ~3 s
+#   Host reply (non-standard): FF <page> 32 <50 data bytes> <crc>
+#     page 03 = live data, page 04 = firmware/temps/2nd current (alternate)
+#   Broadcast identity: FE 10 0000 0011 22 <34 bytes: model, ?, device key>
+#
+# PAGE 03 (data offsets):  0-31 cell 1-16 u16 mV | 32-33 pack u16 mV
+#   34-36 temp u8 (degC+50) | 37 dir (1=chg 0=dsg) | 38-39 |I| u16 0.01 A
+#   40 SOC u8 % | 41 charging flag | 42,43,49 unknown
+# PAGE 04: 0-4 ASCII fw "1.0.3" | 8-18 temp u8 x11 (degC+50)
+#   19 dir | 20-21 |I2| u16 0.01 A (likely charger/bus current - unconfirmed)
+#
+# Receive-only: tx_pin is configured ONLY to hold the base's auto-direction
+# circuit in receive (idle high). Nothing is ever written to the bus.
+# WIRING: see README / docs/wiring.svg. Two left signal pins = RS485 A/B
+#         (if no valid frames, swap A and B - harmless). No ground needed when
+#         the Atom is powered from the F5000's own DC/USB output.
+#         NEVER connect the top-right signal pin: it carries pack voltage (~53 V).
+# ============================================================================
+
+substitutions:
+  device_name: pecron-bus
+
+esphome:
+  name: ${device_name}
+  on_boot:
+    priority: -100
+    then:
+      - lambda: 'id(fbuf).reserve(512);'
+
+esp32:
+  board: m5stack-atom
+  framework:
+    type: arduino
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+logger:
+  level: INFO
+  baud_rate: 0
+  tx_buffer_size: 2048
+  logs:
+    sensor: NONE
+    binary_sensor: NONE
+    text_sensor: NONE
+    switch: NONE
+    api.connection: NONE
+
+globals:
+  - id: fbuf
+    type: std::vector<uint8_t>
+  - id: last_rx_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: raw_log
+    type: bool
+    initial_value: 'false'
+  - id: n_ok
+    type: uint32_t
+    initial_value: '0'
+  - id: n_junk
+    type: uint32_t
+    initial_value: '0'
+
+uart:
+  id: bus
+  rx_pin: GPIO22
+  tx_pin: GPIO19          # idle-high only -> keeps the base in receive; never written
+  baud_rate: 115200
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+  rx_buffer_size: 2048
+
+interval:
+  - interval: 5ms
+    then:
+      - lambda: |-
+          uint8_t b;
+          while (id(bus).available()) {
+            id(bus).read_byte(&b);
+            if (id(fbuf).size() < 512) id(fbuf).push_back(b);
+            id(last_rx_ms) = millis();
+          }
+          if (id(fbuf).empty() || millis() - id(last_rx_ms) <= 4) return;
+
+          std::vector<uint8_t> f;
+          f.swap(id(fbuf));
+          const int n = f.size();
+
+          auto crc_ok = [&](int s, int len) -> bool {       // len excludes the 2 CRC bytes
+            if (s < 0 || s + len + 2 > n) return false;
+            uint16_t c = 0xFFFF;
+            for (int k = s; k < s + len; k++) {
+              c ^= f[k];
+              for (int j = 0; j < 8; j++) c = (c & 1) ? (c >> 1) ^ 0xA001 : (c >> 1);
+            }
+            return f[s + len] == (c & 0xFF) && f[s + len + 1] == (c >> 8);
+          };
+          auto u16 = [&](int k) -> int { return (f[k] << 8) | f[k + 1]; };
+          auto hex = [&](int s, int len) -> std::string {
+            std::string h; char t[4];
+            for (int k = s; k < s + len && k < n; k++) { snprintf(t, sizeof(t), "%02X ", f[k]); h += t; }
+            return h;
+          };
+
+          if (id(raw_log)) ESP_LOGI("raw", "len=%d %s", n, hex(0, n).c_str());
+
+          int i = 0;
+          while (i < n) {
+            // ---- 8-byte read request: <addr> 03 <reg16> <cnt16> <crc> ----
+            if (i + 8 <= n && f[i + 1] == 0x03 && crc_ok(i, 6)) {
+              int reg = u16(i + 2);
+              if (reg != 0x8202) ESP_LOGI("bus", "poll addr %02X reg %04X cnt %d", f[i], reg, u16(i + 4));
+              id(n_ok)++; i += 8; continue;
+            }
+            // ---- identity broadcast: FE 10 0000 0011 22 <34> <crc> ----
+            if (i + 43 <= n && f[i] == 0xFE && f[i + 1] == 0x10 && f[i + 6] == 0x22 && crc_ok(i, 41)) {
+              const int d = i + 7;
+              std::string model, key;
+              for (int k = 0; k < 16; k++) if (f[d + k] >= 0x20 && f[d + k] < 0x7F) model += (char) f[d + k];
+              for (int k = 18; k < 30; k++) if (f[d + k] >= 0x20 && f[d + k] < 0x7F) key += (char) f[d + k];
+              if (id(t_model).state != model) id(t_model).publish_state(model);
+              if (id(t_key).state != key) id(t_key).publish_state(key);
+              id(n_ok)++; i += 43; continue;
+            }
+            // ---- data reply: <addr> <page> <bytecount> <data> <crc> ----
+            if (i + 5 <= n) {
+              int bc = f[i + 2];
+              if (bc > 0 && i + 5 + bc <= n && crc_ok(i, 3 + bc)) {
+                uint8_t addr = f[i], page = f[i + 1];
+                const int d = i + 3;
+                id(n_ok)++;
+                if (addr != 0xFF) {
+                  ESP_LOGI("bus", "PACK addr %02X page %02X: %s", addr, page, hex(d, bc).c_str());
+                } else if (page == 0x03 && bc == 50) {
+                  sensor::Sensor *cs[16] = {id(c1), id(c2), id(c3), id(c4), id(c5), id(c6), id(c7), id(c8),
+                                            id(c9), id(c10), id(c11), id(c12), id(c13), id(c14), id(c15), id(c16)};
+                  int mn = 99999, mx = 0, lo = 0, hi = 0;
+                  for (int k = 0; k < 16; k++) {
+                    int mv = u16(d + k * 2);
+                    cs[k]->publish_state(mv);
+                    if (mv < mn) { mn = mv; lo = k + 1; }
+                    if (mv > mx) { mx = mv; hi = k + 1; }
+                  }
+                  id(cell_min).publish_state(mn);  id(cell_max).publish_state(mx);
+                  id(cell_diff).publish_state(mx - mn);
+                  id(cell_lo).publish_state(lo);   id(cell_hi).publish_state(hi);
+                  float v = u16(d + 32) / 1000.0f;
+                  id(pack_v).publish_state(v);
+                  id(t1).publish_state((int) f[d + 34] - 50);
+                  id(t2).publish_state((int) f[d + 35] - 50);
+                  id(t3).publish_state((int) f[d + 36] - 50);
+                  float a = u16(d + 38) / 100.0f;
+                  if (f[d + 37] == 0) a = -a;
+                  id(pack_i).publish_state(a);
+                  id(pack_p).publish_state(v * a);
+                  id(soc).publish_state(f[d + 40]);
+                  id(charging).publish_state(f[d + 41] != 0);
+                  id(unk42).publish_state(f[d + 42]);
+                  id(unk43).publish_state(f[d + 43]);
+                  id(unk49).publish_state(f[d + 49]);
+                } else if (page == 0x04 && bc == 50) {
+                  std::string fw;
+                  for (int k = 0; k < 8 && f[d + k]; k++) fw += (char) f[d + k];
+                  if (id(t_fw).state != fw) id(t_fw).publish_state(fw);
+                  sensor::Sensor *ts[8] = {id(t4), id(t5), id(t6), id(t7), id(t8), id(t9), id(t10), id(t11)};
+                  int tmax = -100;
+                  for (int k = 0; k < 11; k++) {
+                    int tc = (int) f[d + 8 + k] - 50;
+                    if (tc > tmax) tmax = tc;
+                    if (k >= 3) ts[k - 3]->publish_state(tc);
+                  }
+                  id(t_max).publish_state(tmax);
+                  float a2 = u16(d + 20) / 100.0f;
+                  if (f[d + 19] == 0) a2 = -a2;
+                  id(cur2).publish_state(a2);
+                } else {
+                  ESP_LOGI("bus", "HOST new page %02X (bc %d): %s", page, bc, hex(d, bc).c_str());
+                }
+                i += 5 + bc; continue;
+              }
+            }
+            id(n_junk)++; i++;
+          }
+
+sensor:
+  # ---------------- host pack ----------------
+  - { platform: template, name: "F5000 Pack Voltage", id: pack_v, unit_of_measurement: V, device_class: voltage, state_class: measurement, accuracy_decimals: 3, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Pack Current", id: pack_i, unit_of_measurement: A, device_class: current, state_class: measurement, accuracy_decimals: 2, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Pack Power", id: pack_p, unit_of_measurement: W, device_class: power, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 SOC", id: soc, unit_of_measurement: "%", device_class: battery, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell Min", id: cell_min, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell Max", id: cell_max, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell Differential", id: cell_diff, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, icon: mdi:arrow-expand-vertical, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Low Cell Number", id: cell_lo, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 High Cell Number", id: cell_hi, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 01", id: c1, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 02", id: c2, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 03", id: c3, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 04", id: c4, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 05", id: c5, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 06", id: c6, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 07", id: c7, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 08", id: c8, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 09", id: c9, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 10", id: c10, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 11", id: c11, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 12", id: c12, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 13", id: c13, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 14", id: c14, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 15", id: c15, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Cell 16", id: c16, unit_of_measurement: mV, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp 01", id: t1, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp 02", id: t2, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp 03", id: t3, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp 04", id: t4, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp 05", id: t5, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp 06", id: t6, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp 07", id: t7, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp 08", id: t8, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp 09", id: t9, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp 10", id: t10, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp 11", id: t11, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Temp Max", id: t_max, unit_of_measurement: "°C", device_class: temperature, state_class: measurement, accuracy_decimals: 0, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Current 2 (unconfirmed)", id: cur2, unit_of_measurement: A, device_class: current, state_class: measurement, accuracy_decimals: 2, filters: [{ timeout: 60s }] }
+  # ---------------- unknown fields (diagnostic) ----------------
+  - { platform: template, name: "F5000 Unknown P3[42]", id: unk42, accuracy_decimals: 0, entity_category: diagnostic, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Unknown P3[43]", id: unk43, accuracy_decimals: 0, entity_category: diagnostic, filters: [{ timeout: 60s }] }
+  - { platform: template, name: "F5000 Unknown P3[49]", id: unk49, accuracy_decimals: 0, entity_category: diagnostic, filters: [{ timeout: 60s }] }
+  # ---------------- bus health ----------------
+  - { platform: template, name: "Bus Valid Messages", accuracy_decimals: 0, entity_category: diagnostic, update_interval: 30s, lambda: 'return id(n_ok);' }
+  - { platform: template, name: "Bus Junk Bytes", accuracy_decimals: 0, entity_category: diagnostic, update_interval: 30s, lambda: 'return id(n_junk);' }
+
+binary_sensor:
+  - { platform: template, name: "F5000 Charging", id: charging, icon: mdi:battery-charging }
+
+text_sensor:
+  - { platform: template, name: "F5000 Model", id: t_model, entity_category: diagnostic }
+  - { platform: template, name: "F5000 Device Key", id: t_key, entity_category: diagnostic }
+  - { platform: template, name: "F5000 BMS Firmware", id: t_fw, entity_category: diagnostic }
+
+switch:
+  - platform: template
+    name: "Log Raw Frames"
+    optimistic: true
+    restore_mode: ALWAYS_OFF
+    entity_category: config
+    turn_on_action:  [{ lambda: 'id(raw_log) = true;' }]
+    turn_off_action: [{ lambda: 'id(raw_log) = false;' }]
+
+button:
+  - platform: restart
+    name: "Restart Pecron Bus Decoder"
