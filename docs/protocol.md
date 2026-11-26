@@ -43,7 +43,7 @@ Polls are ~200 ms apart; there is a quiet gap of ~1 s after the broadcast.
 | 42 | u8 | Unknown (19 constant so far) |
 | 43 | u8 | Unknown (36 constant so far) |
 | 44–48 | u8 | Always 0 so far |
-| 49 | u8 | Unknown; increments slowly at rest (6 → 11 over ~20 min after full) |
+| 49 | u8 | Likely a discharged-charge counter: +1 per ~0.015–0.02 Ah drawn (every ~3.8 min at 0.3 A, ~2.5 min at 0.38 A), no change while charging; low after a full charge. Unconfirmed |
 
 ## Page 04 — firmware, temperatures, second current (50 bytes)
 
@@ -80,5 +80,12 @@ Polls are ~200 ms apart; there is a quiet gap of ~1 s after the broadcast.
 - Idle draw with DC output on, AC off: about 0.32–0.38 A from the pack (≈ 18–21 W).
 - At full charge the station holds ≈ 56.76 V (3.548 V/cell average) and tapers current from
   ~11.5 A to ~1 A in about 12 minutes, then pulses ~0.76 A on and off.
-- No sign of passive balancing at the top of charge or at rest; the cell spread relaxed from
-  149 mV to 87 mV over 20 minutes with no current.
+- **Balancing happens during the top-of-charge hold.** Over one overnight cycle the pack was
+  held at 56.76 V with ~0 A for about 3 hours. In the first ~2 hours the two highest cells fell
+  3.620 → 3.603 V, the lowest cell rose 3.452 → 3.480 V, middle cells moved only 4–7 mV, and
+  the spread closed 168 → 123 mV. It then stopped abruptly with the highest cells at ~3.603 V
+  (possibly a ~3.60 V threshold or a ~2 h limit), and nothing changed for the last hour.
+- Because only the lowest cell rose noticeably while middle cells stayed flat, this looks like
+  **active balancing** (charge moved from the highest to the lowest cells) rather than a passive
+  bleed. Current resolution (~0.06 A) cannot fully exclude a small bleed.
+- No balancing was seen at rest after the hold ended.

@@ -82,8 +82,10 @@ Full byte-level notes: [docs/protocol.md](docs/protocol.md).
 
 - The BMS exposes **status only**. A read-only probe sweep found no settings pages: it answers
   only register numbers ending in `02` with length `0x32`, and always with the same two pages.
-- Unknown fields: page 03 bytes 42 and 43 (constant 19 / 36 so far) and byte 49 (slowly
-  increments at rest — possibly a rest or state counter).
+- Unknown fields: page 03 bytes 42 and 43 (constant 19 / 36 so far). Byte 49 looks like a
+  discharged-charge counter (unconfirmed).
+- The BMS balances during the top-of-charge hold at 56.76 V, apparently actively (highest cells
+  down, lowest cell up) until the highest cells reach ~3.60 V. See the protocol notes.
 - **Current 2** reads about two thirds of the pack current at idle; possibly an
   auxiliary/DC branch. Unconfirmed.
 - No expansion pack has been captured yet. If you own one, a raw log with it connected
